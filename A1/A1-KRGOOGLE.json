@@ -1,0 +1,480 @@
+{
+  "name": "Keyword Research PRO - Google Suggest A-Z + OpenAI",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "77755cfc-a68a-41d6-a90a-275806832ea0",
+      "name": "Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        16,
+        -352
+      ],
+      "webhookId": "keyword-research-chat"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// NODO 1: PARSEAR ENTRADA DEL USUARIO\n// ============================================\n// Formato esperado: \"keyword, idioma\"\n// Ejemplos:\n//   \"hoteles baratos en managua, es\"\n//   \"cheap hotels london, en\"\n//   \"hoteles managua\" (default: español)\n// ============================================\n\nconst input = $input.first().json.chatInput || $input.first().json.text || '';\n\n// Separar keyword e idioma por coma\nconst parts = input.split(',').map(s => s.trim());\nconst keyword = parts[0] || '';\nconst langInput = (parts[1] || 'es').toLowerCase();\n\n// Mapeo flexible de idiomas\nconst langMap = {\n  'es': 'es', 'español': 'es', 'spanish': 'es', 'espanol': 'es',\n  'en': 'en', 'inglés': 'en', 'english': 'en', 'ingles': 'en',\n  'fr': 'fr', 'francés': 'fr', 'french': 'fr', 'frances': 'fr',\n  'pt': 'pt', 'portugués': 'pt', 'portuguese': 'pt', 'portugues': 'pt',\n  'de': 'de', 'alemán': 'de', 'german': 'de', 'aleman': 'de',\n  'it': 'it', 'italiano': 'it', 'italian': 'it'\n};\n\nconst hl = langMap[langInput] || langInput.substring(0, 2);\n\nif (!keyword) {\n  return [{\n    json: {\n      error: true,\n      output: '❌ Formato: escribe una keyword seguida de coma y el idioma.\\n\\nEjemplos:\\n• hoteles baratos en managua, es\\n• cheap hotels in london, en\\n• restaurants paris, fr'\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    keyword: keyword,\n    language: hl,\n    originalInput: input\n  }\n}];"
+      },
+      "id": "67288ebe-bb24-4a81-9eee-99ac37957dde",
+      "name": "Parsear Entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// NODO 2: GENERAR VARIACIONES A-Z\n// ============================================\n// Crea 27 variaciones de la keyword:\n// - La keyword original (sin letra)\n// - keyword + \" a\", keyword + \" b\", ..., keyword + \" z\"\n// Cada una se enviará a Google Suggest = ~270 keywords\n// ============================================\n\nconst keyword = $input.first().json.keyword;\nconst language = $input.first().json.language;\n\n// Generar la keyword original + 26 variaciones con letras\nconst letters = ['', ...'abcdefghijklmnopqrstuvwxyz'.split('')];\n\nconst variations = letters.map(letter => ({\n  json: {\n    searchQuery: letter ? `${keyword} ${letter}` : keyword,\n    originalKeyword: keyword,\n    language: language,\n    letter: letter || 'original'\n  }\n}));\n\nreturn variations;"
+      },
+      "id": "f6d0ee15-74b3-4493-96d9-092bed9f5c5a",
+      "name": "Generar Variaciones A-Z",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "ad78dfcc-5033-40a3-b396-c7de776e7b49",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        720,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://suggestqueries.google.com/complete/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "client",
+              "value": "firefox"
+            },
+            {
+              "name": "q",
+              "value": "={{ $json.searchQuery }}"
+            },
+            {
+              "name": "hl",
+              "value": "={{ $json.language }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "b63ee3aa-24ee-4cf2-baf5-c9f989e17579",
+      "name": "Google Suggest API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 1
+      },
+      "id": "1f72f6a5-f00a-48cd-a0fc-bb4a8fc0ca07",
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        592
+      ],
+      "webhookId": "49b431f0-dddd-4059-811e-c63fd54c257a"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// NODO 3: EXTRAER TODAS LAS KEYWORDS DE GOOGLE\n// ============================================\n// Recoge TODAS las respuestas del loop y extrae\n// las sugerencias en una lista plana.\n// Elimina duplicados.\n// ============================================\n\nconst allItems = $input.all();\nconst keywordsSet = new Set();\nlet originalKeyword = '';\nlet language = 'es';\n\nfor (const item of allItems) {\n  const data = item.json;\n  \n  // Intentar capturar originalKeyword y language\n  if (data.originalKeyword) originalKeyword = data.originalKeyword;\n  if (data.language) language = data.language;\n  \n  // La respuesta HTTP puede venir en varios formatos\n  let rawText = data.data || data.body || '';\n  \n  // Si es un objeto, intentar stringificar\n  if (typeof rawText === 'object') {\n    rawText = JSON.stringify(rawText);\n  }\n  \n  try {\n    // Buscar el array JSON en la respuesta\n    const text = String(rawText);\n    const startIdx = text.indexOf('[');\n    const endIdx = text.lastIndexOf(']') + 1;\n    \n    if (startIdx >= 0 && endIdx > startIdx) {\n      const parsed = JSON.parse(text.substring(startIdx, endIdx));\n      \n      if (Array.isArray(parsed) && Array.isArray(parsed[1])) {\n        for (const suggestion of parsed[1]) {\n          if (typeof suggestion === 'string' && suggestion.trim()) {\n            keywordsSet.add(suggestion.trim().toLowerCase());\n          }\n        }\n      }\n    }\n  } catch (e) {\n    // Ignorar errores de parsing individual\n  }\n}\n\n// Convertir Set a array de items\nconst keywords = [...keywordsSet];\n\nif (keywords.length === 0) {\n  return [{\n    json: {\n      source: 'google',\n      keyword: 'Sin resultados de Google',\n      originalKeyword: originalKeyword,\n      language: language\n    }\n  }];\n}\n\nreturn keywords.map((kw, i) => ({\n  json: {\n    source: 'google',\n    keyword: kw,\n    originalKeyword: originalKeyword,\n    language: language,\n    index: i + 1\n  }\n}));"
+      },
+      "id": "97831f4a-4445-457b-8232-e017684b0cb7",
+      "name": "Extraer Keywords Google",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "Eres un experto en SEO y keyword research. Tu tarea es generar una lista exhaustiva de palabras clave relacionadas con el tema que te dé el usuario.\n\nREGLAS ESTRICTAS:\n1. Genera EXACTAMENTE entre 50 y 80 keywords\n2. Incluye variaciones: long-tail, preguntas, comparativas, con ubicación, con intención de compra\n3. Responde SOLO con un JSON array de strings, nada más\n4. NO incluyas explicaciones, solo el JSON\n5. Incluye keywords en el idioma indicado\n6. Piensa como un usuario real buscando en Google\n\nCATEGORÍAS que debes cubrir:\n- Keywords de COMPRA: \"comprar X\", \"precio de X\", \"X barato\", \"donde comprar X\"\n- Keywords de COMPARACIÓN: \"mejor X\", \"X vs Y\", \"top 10 X\", \"X recomendados\"\n- Keywords INFORMATIVAS: \"qué es X\", \"cómo funciona X\", \"guía de X\", \"tipos de X\"\n- Keywords LOCALES: \"X en [ciudad]\", \"X cerca de mí\", \"X [zona/barrio]\"\n- Keywords de PREGUNTAS: \"¿cuánto cuesta X?\", \"¿vale la pena X?\", \"¿cuál es el mejor X?\"\n- Keywords LONG-TAIL: frases de 4-7 palabras muy específicas\n\nFormato de respuesta (SOLO ESTO, nada más):\n[\"keyword 1\", \"keyword 2\", \"keyword 3\", ...]",
+              "role": "system"
+            },
+            {
+              "content": "=Genera keywords para: \"{{ $('Parsear Entrada').first().json.keyword }}\"\nIdioma: {{ $('Parsear Entrada').first().json.language }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 4000,
+          "temperature": 0.8
+        }
+      },
+      "id": "3283270b-dd51-4f53-b5c1-765ba2b9a5e4",
+      "name": "OpenAI Generar Keywords",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        864,
+        -384
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "2TfKOivConWlfQOn",
+          "name": "Elena-OM1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// NODO 4: PARSEAR RESPUESTA DE OPENAI\n// ============================================\n// Extrae el array JSON de keywords de la\n// respuesta de ChatGPT\n// ============================================\n\nconst response = $input.first().json;\n\n// El texto puede estar en diferentes campos según versión del nodo\nlet text = response.text || response.content || response.message?.content || '';\n\n// Si es un array de content blocks\nif (Array.isArray(response.content)) {\n  text = response.content\n    .filter(b => b.type === 'text')\n    .map(b => b.text)\n    .join('');\n}\n\nconst originalKeyword = $('Parsear Entrada').first().json.keyword;\nconst language = $('Parsear Entrada').first().json.language;\n\nlet keywords = [];\n\ntry {\n  // Limpiar el texto: quitar markdown code blocks si los hay\n  let cleanText = text\n    .replace(/```json\\n?/g, '')\n    .replace(/```\\n?/g, '')\n    .trim();\n  \n  // Encontrar el array JSON\n  const startIdx = cleanText.indexOf('[');\n  const endIdx = cleanText.lastIndexOf(']') + 1;\n  \n  if (startIdx >= 0 && endIdx > startIdx) {\n    keywords = JSON.parse(cleanText.substring(startIdx, endIdx));\n  }\n} catch (e) {\n  // Fallback: intentar extraer líneas como keywords\n  keywords = text.split('\\n')\n    .map(line => line.replace(/^[\\d\\-\\*\\.\\)]+\\s*/, '').trim())\n    .filter(line => line.length > 3 && line.length < 100);\n}\n\nif (keywords.length === 0) {\n  return [{\n    json: {\n      source: 'openai',\n      keyword: 'Sin resultados de OpenAI',\n      originalKeyword: originalKeyword,\n      language: language\n    }\n  }];\n}\n\nreturn keywords.map((kw, i) => ({\n  json: {\n    source: 'openai',\n    keyword: String(kw).trim().toLowerCase(),\n    originalKeyword: originalKeyword,\n    language: language,\n    index: i + 1\n  }\n}));"
+      },
+      "id": "da62a2f7-3d82-4afe-ae1f-671d572458c7",
+      "name": "Parsear Keywords OpenAI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1424,
+        -272
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "a4f0a1d8-ea7b-4b47-a67b-e1b42f805748",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1648,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// NODO 5: ELIMINAR DUPLICADOS\n// ============================================\n// Combina keywords de Google + OpenAI\n// y elimina duplicados por texto normalizado\n// ============================================\n\nconst allItems = $input.all();\nconst seen = new Map(); // keyword normalizada -> item original\n\nfor (const item of allItems) {\n  const kw = (item.json.keyword || '').trim().toLowerCase();\n  \n  if (kw && kw.length > 2 && !kw.includes('sin resultado')) {\n    if (!seen.has(kw)) {\n      seen.set(kw, item.json);\n    } else {\n      // Si ya existe, marcar que viene de ambas fuentes\n      const existing = seen.get(kw);\n      if (existing.source !== item.json.source) {\n        existing.source = 'google+openai';\n      }\n    }\n  }\n}\n\nconst uniqueKeywords = [...seen.values()];\n\nreturn uniqueKeywords.map((data, i) => ({\n  json: {\n    ...data,\n    index: i + 1,\n    totalKeywords: uniqueKeywords.length\n  }\n}));"
+      },
+      "id": "563a9c12-bbae-4d90-871f-edd3d85e54ec",
+      "name": "Eliminar Duplicados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// NODO 6: PREPARAR LOTE PARA CLASIFICACIÓN\n// ============================================\n// Agrupa TODAS las keywords en un solo texto\n// para enviar a OpenAI en UNA sola llamada\n// (más eficiente que clasificar una por una)\n// ============================================\n\nconst allItems = $input.all();\nconst keywords = allItems.map(item => item.json.keyword);\n\n// Crear un JSON array de todas las keywords\nconst keywordsList = JSON.stringify(keywords);\n\nreturn [{\n  json: {\n    keywordsList: keywordsList,\n    keywordsArray: keywords,\n    totalCount: keywords.length,\n    originalKeyword: allItems[0]?.json?.originalKeyword || '',\n    language: allItems[0]?.json?.language || 'es',\n    // Guardar el mapping source para cada keyword\n    sourcesMap: JSON.stringify(\n      Object.fromEntries(\n        allItems.map(item => [item.json.keyword, item.json.source || 'unknown'])\n      )\n    )\n  }\n}];"
+      },
+      "id": "848a9ae0-5d4b-42df-8b04-d812d73c1f95",
+      "name": "Preparar para Clasificar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2528,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "Eres un experto en SEO clasificando la intención de búsqueda de keywords.\n\nCLASIFICACIONES (usa EXACTAMENTE estos nombres):\n\n🛒 COMPRA (Transactional)\n- El usuario quiere comprar, reservar, contratar o adquirir algo\n- Señales: comprar, precio, barato, oferta, descuento, reservar, contratar, cuánto cuesta, tarifa, económico, pagar, envío, alquiler\n\n📊 INVESTIGACION (Commercial Investigation)  \n- El usuario está comparando opciones antes de decidir\n- Señales: mejor, mejores, comparar, vs, review, opiniones, top, recomendaciones, ranking, calificados, alternativas, vale la pena\n\nℹ️ INFORMATIVA (Informational)\n- El usuario busca aprender, entender o resolver una duda\n- Señales: qué es, cómo, por qué, guía, tutorial, tipos de, ventajas, consejos, pasos, requisitos, historia\n\n📍 LOCAL (Local Intent)\n- El usuario busca algo en una ubicación específica\n- Señales: en [ciudad], cerca de, dirección, horario, zona, centro, aeropuerto, barrio\n\n🔗 NAVEGACIONAL (Navigational)\n- El usuario busca un sitio, marca o recurso específico\n- Señales: nombre de marca, login, página oficial, app, descargar, contacto\n\nREGLAS:\n1. Si una keyword tiene DOBLE intención (ej: \"hoteles baratos en managua\" = COMPRA + LOCAL), clasifícala como \"COMPRA + LOCAL\" o la combinación que aplique\n2. Responde SOLO con un JSON array de objetos\n3. Cada objeto: {\"keyword\": \"...\", \"tipo\": \"...\", \"subtipo\": \"...\"}\n4. El campo \"subtipo\" es más específico: \"precio\", \"comparativa\", \"pregunta\", \"ubicación\", \"how-to\", \"marca\", etc.\n5. NO incluyas explicaciones, SOLO el JSON array",
+              "role": "system"
+            },
+            {
+              "content": "=Clasifica estas {{ $json.totalCount }} keywords:\n\n{{ $json.keywordsList }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 8000,
+          "temperature": 0.3
+        }
+      },
+      "id": "8f004a52-d75f-472e-9bb7-1665566357ef",
+      "name": "OpenAI Clasificar Keywords",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        2576,
+        592
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "2TfKOivConWlfQOn",
+          "name": "Elena-OM1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// NODO 7: FORMATEAR RESULTADO FINAL\n// ============================================\n// Combina la clasificación de OpenAI con\n// la info de fuente (Google/OpenAI/ambos)\n// y genera una lista completa y bonita\n// ============================================\n\nconst classifyResponse = $input.first().json;\nconst prepData = $('Preparar para Clasificar').first().json;\n\n// Obtener la respuesta de clasificación\nlet responseText = classifyResponse.text || classifyResponse.content || '';\nif (Array.isArray(classifyResponse.content)) {\n  responseText = classifyResponse.content\n    .filter(b => b.type === 'text')\n    .map(b => b.text)\n    .join('');\n}\n\n// Parsear la clasificación\nlet classified = [];\ntry {\n  const cleanText = responseText\n    .replace(/```json\\n?/g, '')\n    .replace(/```\\n?/g, '')\n    .trim();\n  \n  const startIdx = cleanText.indexOf('[');\n  const endIdx = cleanText.lastIndexOf(']') + 1;\n  \n  if (startIdx >= 0 && endIdx > startIdx) {\n    classified = JSON.parse(cleanText.substring(startIdx, endIdx));\n  }\n} catch (e) {\n  // Si falla el parsing, usar las keywords sin clasificar\n  const keywords = JSON.parse(prepData.keywordsArray || '[]');\n  classified = keywords.map(kw => ({\n    keyword: kw,\n    tipo: 'SIN CLASIFICAR',\n    subtipo: 'error parsing'\n  }));\n}\n\n// Obtener mapa de fuentes\nlet sourcesMap = {};\ntry {\n  sourcesMap = JSON.parse(prepData.sourcesMap || '{}');\n} catch (e) {}\n\n// Agrupar por tipo\nconst grupos = {};\nfor (const item of classified) {\n  const tipo = item.tipo || 'SIN CLASIFICAR';\n  if (!grupos[tipo]) grupos[tipo] = [];\n  \n  const source = sourcesMap[item.keyword] || sourcesMap[item.keyword?.toLowerCase()] || '?';\n  const sourceEmoji = source === 'google' ? '🔍' : source === 'openai' ? '🤖' : source === 'google+openai' ? '🔍🤖' : '•';\n  \n  grupos[tipo].push({\n    keyword: item.keyword,\n    subtipo: item.subtipo || '',\n    source: sourceEmoji\n  });\n}\n\n// Contar totales\nconst totalKeywords = classified.length;\nconst fromGoogle = Object.values(sourcesMap).filter(s => s === 'google' || s === 'google+openai').length;\nconst fromOpenAI = Object.values(sourcesMap).filter(s => s === 'openai' || s === 'google+openai').length;\nconst fromBoth = Object.values(sourcesMap).filter(s => s === 'google+openai').length;\n\n// Construir la respuesta formateada\nlet output = `# 🔎 Keyword Research: \"${prepData.originalKeyword}\"\\n\\n`;\noutput += `## 📊 Resumen\\n`;\noutput += `- **Total keywords encontradas:** ${totalKeywords}\\n`;\noutput += `- **De Google Suggest (A-Z):** ${fromGoogle} 🔍\\n`;\noutput += `- **De OpenAI/ChatGPT:** ${fromOpenAI} 🤖\\n`;\noutput += `- **Coinciden en ambas fuentes:** ${fromBoth} 🔍🤖\\n`;\noutput += `- **Idioma:** ${prepData.language}\\n\\n`;\noutput += `---\\n\\n`;\n\n// Orden de prioridad para mostrar tipos\nconst ordenTipos = [\n  'COMPRA', 'COMPRA + LOCAL', \n  'INVESTIGACION', 'INVESTIGACION + LOCAL',\n  'LOCAL', \n  'INFORMATIVA', \n  'NAVEGACIONAL',\n  'SIN CLASIFICAR'\n];\n\n// Mostrar grupos en orden\nconst tiposPresentes = [...new Set([...ordenTipos.filter(t => grupos[t]), ...Object.keys(grupos)])];\n\nfor (const tipo of tiposPresentes) {\n  if (!grupos[tipo] || grupos[tipo].length === 0) continue;\n  \n  const items = grupos[tipo];\n  output += `## ${tipo} (${items.length} keywords)\\n\\n`;\n  \n  // Tabla con headers\n  output += `| # | Keyword | Subtipo | Fuente |\\n`;\n  output += `|---|---------|---------|--------|\\n`;\n  \n  items.forEach((item, i) => {\n    output += `| ${i + 1} | ${item.keyword} | ${item.subtipo} | ${item.source} |\\n`;\n  });\n  \n  output += `\\n`;\n}\n\noutput += `---\\n`;\noutput += `\\n🔍 = Google Suggest | 🤖 = OpenAI | 🔍🤖 = Ambas fuentes\\n`;\noutput += `\\n*Generado con Google Suggest API (expansión A-Z) + OpenAI GPT-4o-mini*`;\n\nreturn [{\n  json: {\n    output: output\n  }\n}];"
+      },
+      "id": "1dd56819-010b-491c-939b-6eef16e94a5c",
+      "name": "Formatear Lista Final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2960,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        944,
+        -208
+      ],
+      "id": "ec237c0c-6c86-4fad-b324-49661032d607",
+      "name": "Edit Fields"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Chat Trigger": {
+      "main": [
+        []
+      ]
+    },
+    "Parsear Entrada": {
+      "main": [
+        [
+          {
+            "node": "Generar Variaciones A-Z",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "OpenAI Generar Keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar Variaciones A-Z": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Google Suggest API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extraer Keywords Google",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Suggest API": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Keywords Google": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Generar Keywords": {
+      "main": [
+        [
+          {
+            "node": "Parsear Keywords OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Keywords OpenAI": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Eliminar Duplicados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eliminar Duplicados": {
+      "main": [
+        [
+          {
+            "node": "Preparar para Clasificar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar para Clasificar": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Clasificar Keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Clasificar Keywords": {
+      "main": [
+        [
+          {
+            "node": "Formatear Lista Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "affed757-5bd9-465e-8741-b8456baf7819",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a87651d22b4cf48d7872d5b5fc6bc02a3783360993537e5aaf40dcb78bc95203"
+  },
+  "id": "lvnjbl7DmY8JXeWd",
+  "tags": [
+    {
+      "updatedAt": "2026-03-14T20:48:52.352Z",
+      "createdAt": "2026-03-14T20:48:52.352Z",
+      "id": "Y8371Y1MkTPQSnJV",
+      "name": "Google Suggest"
+    },
+    {
+      "updatedAt": "2026-03-14T21:03:24.263Z",
+      "createdAt": "2026-03-14T21:03:24.263Z",
+      "id": "lQJa5bYuM2KoziFc",
+      "name": "OpenAI"
+    },
+    {
+      "updatedAt": "2026-03-14T20:48:52.342Z",
+      "createdAt": "2026-03-14T20:48:52.342Z",
+      "id": "lhMfrvigiP8d2PgA",
+      "name": "SEO"
+    },
+    {
+      "updatedAt": "2026-03-14T20:48:52.357Z",
+      "createdAt": "2026-03-14T20:48:52.357Z",
+      "id": "t1VCtoQXrBarwCt3",
+      "name": "Keyword Research"
+    }
+  ]
+}
