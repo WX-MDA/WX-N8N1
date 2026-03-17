@@ -1,0 +1,26 @@
+{
+  "name": "a2 - Agente 2",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a2-manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        300
+      ]
+    }
+  ],
+  "connections": {},
+  "active": false,
+  "settings": {},
+  "staticData": null,
+  "pinData": {},
+  "meta": {
+    "cli": {
+      "folder": "A2"
+    }
+  }
+}
