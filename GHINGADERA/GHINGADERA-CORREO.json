@@ -20,8 +20,8 @@
       "position": [240, 300],
       "credentials": {
         "gmailOAuth2": {
-          "id": "",
-          "name": "Gmail account"
+          "id": "IaQWo1cINhoaknAo",
+          "name": "Gmail Walter Xtreme"
         }
       }
     },
@@ -73,7 +73,7 @@
       "parameters": {
         "model": "gpt-4o-mini",
         "options": {
-          "temperature": 0
+          "temperature": 0.7
         }
       },
       "id": "ghc-003",
@@ -83,8 +83,8 @@
       "position": [680, 520],
       "credentials": {
         "openAiApi": {
-          "id": "",
-          "name": "OpenAI account"
+          "id": "2TfKOivConWlfQOn",
+          "name": "Elena-OM1"
         }
       }
     },
@@ -133,15 +133,14 @@
       "id": "ghc-005",
       "name": "Etiquetar Relevante",
       "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.1,
+      "typeVersion": 2.2,
       "position": [920, 160],
       "credentials": {
         "gmailOAuth2": {
-          "id": "",
-          "name": "Gmail account"
+          "id": "IaQWo1cINhoaknAo",
+          "name": "Gmail Walter Xtreme"
         }
-      },
-      "notes": "⚠️ CONFIGURAR: Reemplazar LABEL_ID_TRABAJO_OK con el ID real de la etiqueta 'Trabajo Programacion OK' de tu Gmail"
+      }
     },
     {
       "parameters": {
@@ -158,12 +157,12 @@
       "id": "ghc-006",
       "name": "Notificar Empleo OK",
       "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.1,
+      "typeVersion": 2.2,
       "position": [1140, 160],
       "credentials": {
         "gmailOAuth2": {
-          "id": "",
-          "name": "Gmail account"
+          "id": "IaQWo1cINhoaknAo",
+          "name": "Gmail Walter Xtreme"
         }
       }
     },
@@ -181,15 +180,14 @@
       "id": "ghc-007",
       "name": "Etiquetar No Relevante",
       "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.1,
+      "typeVersion": 2.2,
       "position": [920, 440],
       "credentials": {
         "gmailOAuth2": {
-          "id": "",
-          "name": "Gmail account"
+          "id": "IaQWo1cINhoaknAo",
+          "name": "Gmail Walter Xtreme"
         }
-      },
-      "notes": "⚠️ CONFIGURAR: Reemplazar LABEL_ID_NO_RELEVANTE con el ID real de la etiqueta 'No trabajes ahi' de tu Gmail"
+      }
     }
   ],
   "connections": {
@@ -267,6 +265,6 @@
     "cli": {
       "folder": "GHINGADERA"
     },
-    "notes": "GHINGADERA-CORREO v1.0 — Monitoreo de correos de empleo TI en Nicaragua. ANTES DE ACTIVAR: 1) Asignar credencial Gmail a todos los nodos Gmail. 2) Asignar credencial OpenAI al nodo Modelo OpenAI. 3) Obtener IDs reales de etiquetas Gmail y reemplazar LABEL_ID_TRABAJO_OK y LABEL_ID_NO_RELEVANTE."
+    "notes": "GHINGADERA-CORREO v1.1 — Credenciales correctas asignadas. PENDIENTE: reemplazar LABEL_ID_TRABAJO_OK y LABEL_ID_NO_RELEVANTE con los IDs reales de tus etiquetas Gmail."
   }
 }
