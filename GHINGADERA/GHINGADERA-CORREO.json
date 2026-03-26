@@ -1,0 +1,272 @@
+{
+  "name": "GHINGADERA-CORREO",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {},
+        "options": {}
+      },
+      "id": "ghc-001",
+      "name": "Trigger Correo Nuevo",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ghc-f1",
+              "name": "asunto",
+              "value": "={{ $json.subject }}",
+              "type": "string"
+            },
+            {
+              "id": "ghc-f2",
+              "name": "remitente",
+              "value": "={{ $json.from }}",
+              "type": "string"
+            },
+            {
+              "id": "ghc-f3",
+              "name": "cuerpo_texto",
+              "value": "={{ $json.text || $json.snippet || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "ghc-f4",
+              "name": "id_mensaje",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "ghc-f5",
+              "name": "fecha",
+              "value": "={{ $json.date }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ghc-002",
+      "name": "Extraer Datos Correo",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "ghc-003",
+      "name": "Modelo OpenAI",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [680, 520],
+      "credentials": {
+        "openAiApi": {
+          "id": "",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "inputText": "=Asunto: {{ $json.asunto }}\nDe: {{ $json.remitente }}\nContenido: {{ $json.cuerpo_texto }}",
+        "categories": {
+          "categories": [
+            {
+              "category": "TRABAJO_RELEVANTE",
+              "description": "Oferta de empleo relacionada con programación, desarrollo de software, ingeniería en computación, programador junior, desarrollador junior, QA, quality assurance, soporte TI técnico, help desk técnico, backend, frontend, full stack, fullstack, pasantía de programación, software developer. Ubicada en Nicaragua, Managua o trabajo remoto aplicable desde Nicaragua."
+            },
+            {
+              "category": "TRABAJO_NO_RELEVANTE",
+              "description": "Oferta de trabajo que NO es del área tecnológica ni de programación. Ejemplos: ventas, call center, cajero, bodega, seguridad, campo, promotoría, operarios, limpieza, conductor, administración general, recursos humanos, contabilidad, costura, promotor de ventas."
+            },
+            {
+              "category": "IGNORAR",
+              "description": "No es una oferta de empleo. Incluye: promociones comerciales, descuentos, newsletters, spam, facturas, notificaciones de redes sociales, correos personales, publicidad, marketing, confirmaciones de compra, y cualquier contenido que no sea una vacante laboral."
+            }
+          ]
+        },
+        "options": {
+          "fallbackCategory": "IGNORAR",
+          "multiClass": false,
+          "systemPromptTemplate": "Eres un clasificador experto de correos electrónicos. Tu única tarea es clasificar el correo dado en exactamente una de las categorías disponibles. Analiza el asunto, el remitente y el contenido del correo. Sé preciso y consistente."
+        }
+      },
+      "id": "ghc-004",
+      "name": "Clasificar Correo",
+      "type": "@n8n/n8n-nodes-langchain.textClassifier",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "addLabels",
+        "messageId": "={{ $json.id_mensaje }}",
+        "labelIds": {
+          "labelIds": [
+            "LABEL_ID_TRABAJO_OK"
+          ]
+        }
+      },
+      "id": "ghc-005",
+      "name": "Etiquetar Relevante",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [920, 160],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      },
+      "notes": "⚠️ CONFIGURAR: Reemplazar LABEL_ID_TRABAJO_OK con el ID real de la etiqueta 'Trabajo Programacion OK' de tu Gmail"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "waltdmda15@gmail.com",
+        "subject": "=💼 Empleo TI detectado: {{ $json.asunto }}",
+        "emailType": "html",
+        "message": "=<div style=\"font-family: Arial, sans-serif; max-width: 600px;\">\n  <h2 style=\"color: #2d7d46;\">🔔 GHINGADERA — Nueva oportunidad detectada</h2>\n  <hr style=\"border-color: #2d7d46;\">\n  <table style=\"width:100%;\">\n    <tr><td><b>📌 Asunto:</b></td><td>{{ $json.asunto }}</td></tr>\n    <tr><td><b>👤 De:</b></td><td>{{ $json.remitente }}</td></tr>\n    <tr><td><b>📅 Fecha:</b></td><td>{{ $json.fecha }}</td></tr>\n  </table>\n  <hr>\n  <b>📄 Contenido del correo:</b>\n  <div style=\"background:#f5f5f5; padding:12px; border-radius:4px; margin-top:8px;\">\n    {{ $json.cuerpo_texto }}\n  </div>\n  <hr>\n  <small style=\"color:#888;\">Mensaje generado automáticamente por GHINGADERA</small>\n</div>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "ghc-006",
+      "name": "Notificar Empleo OK",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1140, 160],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "addLabels",
+        "messageId": "={{ $json.id_mensaje }}",
+        "labelIds": {
+          "labelIds": [
+            "LABEL_ID_NO_RELEVANTE"
+          ]
+        }
+      },
+      "id": "ghc-007",
+      "name": "Etiquetar No Relevante",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [920, 440],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      },
+      "notes": "⚠️ CONFIGURAR: Reemplazar LABEL_ID_NO_RELEVANTE con el ID real de la etiqueta 'No trabajes ahi' de tu Gmail"
+    }
+  ],
+  "connections": {
+    "Trigger Correo Nuevo": {
+      "main": [
+        [
+          {
+            "node": "Extraer Datos Correo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Datos Correo": {
+      "main": [
+        [
+          {
+            "node": "Clasificar Correo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modelo OpenAI": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Clasificar Correo",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clasificar Correo": {
+      "main": [
+        [
+          {
+            "node": "Etiquetar Relevante",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Etiquetar No Relevante",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Etiquetar Relevante": {
+      "main": [
+        [
+          {
+            "node": "Notificar Empleo OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {},
+  "meta": {
+    "cli": {
+      "folder": "GHINGADERA"
+    },
+    "notes": "GHINGADERA-CORREO v1.0 — Monitoreo de correos de empleo TI en Nicaragua. ANTES DE ACTIVAR: 1) Asignar credencial Gmail a todos los nodos Gmail. 2) Asignar credencial OpenAI al nodo Modelo OpenAI. 3) Obtener IDs reales de etiquetas Gmail y reemplazar LABEL_ID_TRABAJO_OK y LABEL_ID_NO_RELEVANTE."
+  }
+}
